@@ -513,3 +513,94 @@ body.page-map {
 .site-footer a:hover {
   color: rgba(255, 255, 255, 0.8);
 }
+
+/* ── Mobile responsive ── */
+@media (max-width: 640px) {
+
+  /* Nav: hide site title so all three links fit on one row */
+  .nav-title {
+    display: none;
+  }
+
+  .site-nav {
+    padding: 0 12px;
+  }
+
+  .site-nav .nav-logo {
+    margin-right: 10px;
+    padding: 10px 0;
+  }
+
+  .site-nav .nav-links a {
+    padding: 12px 8px;
+    font-size: 0.78rem;
+  }
+
+  /* Map header: filter-group takes full width, sources + controls share next row */
+  #header {
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  #filter-group {
+    flex: none;
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  /* Hide vertical separators — buttons wrap naturally on mobile */
+  .filter-sep {
+    display: none;
+  }
+
+  /* Slightly larger tap targets */
+  .date-btn {
+    padding: 6px 12px;
+  }
+
+  #sources {
+    flex: 1;
+  }
+
+  #controls {
+    flex: none;
+  }
+
+  /* Status text: keep but truncate if too long */
+  #status {
+    font-size: 0.75rem;
+    max-width: 160px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Tooltip: also show on tap via focus */
+  .info-icon:focus::after {
+    opacity: 1;
+  }
+
+  /* Content pages */
+  .content-main {
+    padding: 28px 16px 48px;
+  }
+
+  .content-main h1 {
+    font-size: 1.6rem;
+  }
+
+  .content-main h2 {
+    font-size: 1.15rem;
+    margin-top: 32px;
+  }
+
+  .fact-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .cta-grid {
+    grid-template-columns: 1fr;
+  }
+}
