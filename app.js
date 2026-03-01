@@ -69,7 +69,7 @@ const RESULT_LIMITS = [
   { value: 10000, label: '10K' },
 ];
 
-let activeResultLimit = 5000;
+let activeResultLimit = 1000;
 
 // ── localStorage cache ───────────────────────────────────────────────────────
 
