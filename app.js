@@ -52,14 +52,37 @@ function isInDateRange(dateStr) {
   return dateStr >= cutoff;
 }
 
+// ── Region filter ────────────────────────────────────────────────────────────
+
+const REGIONS = [
+  { id: 'pacific', label: 'Pacific Coast' },
+  { id: 'world',   label: 'Worldwide' },
+];
+
+let activeRegion = 'world';
+
+// ── Result limit ─────────────────────────────────────────────────────────────
+
+const RESULT_LIMITS = [
+  { value: 1000,  label: '1K'  },
+  { value: 5000,  label: '5K'  },
+  { value: 10000, label: '10K' },
+];
+
+let activeResultLimit = 5000;
+
 // ── localStorage cache ───────────────────────────────────────────────────────
 
-const CACHE_KEY = 'otter-tracker-v2';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+// Cache key encodes all fetch settings so switching region/limit forces a fresh fetch.
+function getCacheKey() {
+  return `otter-tracker-v3-${activeRegion}-${activeResultLimit}`;
+}
 
 function saveCache(resultsById) {
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({
+    localStorage.setItem(getCacheKey(), JSON.stringify({
       savedAt: Date.now(),
       resultsById,
     }));
@@ -70,7 +93,7 @@ function saveCache(resultsById) {
 
 function loadCache() {
   try {
-    const raw = localStorage.getItem(CACHE_KEY);
+    const raw = localStorage.getItem(getCacheKey());
     if (!raw) return null;
     const { savedAt, resultsById } = JSON.parse(raw);
     if (Date.now() - savedAt > CACHE_TTL_MS) return null;
@@ -82,13 +105,23 @@ function loadCache() {
 
 // ── Map setup ────────────────────────────────────────────────────────────────
 
-const map = L.map('map').setView([38.5, -123], 6);
+const INITIAL_VIEW = { center: [38, 178], zoom: 4 };
+
+const map = L.map('map', {
+  minZoom: 2,
+  // Allow one full world wrap so the Pacific (straddling the date line) can be
+  // centered: Japan (~140°E) sits left, Alaska/CA (~120–170°W = 190–240°E) right.
+  // The right bound at 360° stops infinite panning — the user can go around once.
+  maxBounds: [[-85, -180], [85, 360]],
+  maxBoundsViscosity: 1.0,
+}).setView(INITIAL_VIEW.center, INITIAL_VIEW.zoom);
 
 L.tileLayer(
   'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
   {
     attribution: 'Tiles &copy; Esri — Esri, USGS, NOAA',
     maxZoom: 18,
+    // noWrap left off so tiles repeat to fill the Pacific-centric view
   }
 ).addTo(map);
 
@@ -98,18 +131,31 @@ const clusterGroup = L.markerClusterGroup({
 });
 map.addLayer(clusterGroup);
 
-// ── Bounding box (CA → WA coastline) ────────────────────────────────────────
+// ── Bounding box (CA coast → Alaska) ────────────────────────────────────────
 
 const BOUNDS = {
-  swlat: 32.5, swlng: -125.5,
-  nelat: 48.5, nelng: -116.5,
+  swlat: 32.5, swlng: -170,
+  nelat: 62,   nelng: -116.5,
 };
 
-// WKT polygon for APIs that need it (lng lat order per WKT spec)
-const BOUNDS_WKT =
-  `POLYGON((${BOUNDS.swlng} ${BOUNDS.swlat},${BOUNDS.nelng} ${BOUNDS.swlat},` +
-  `${BOUNDS.nelng} ${BOUNDS.nelat},${BOUNDS.swlng} ${BOUNDS.nelat},` +
-  `${BOUNDS.swlng} ${BOUNDS.swlat}))`;
+// ── Fetch helpers ────────────────────────────────────────────────────────────
+
+// Fetch an array of URLs in sequential batches to avoid hammering rate limits.
+async function fetchBatched(urls, batchSize = 5) {
+  const results = [];
+  for (let i = 0; i < urls.length; i += batchSize) {
+    const batch = await Promise.all(
+      urls.slice(i, i + batchSize).map(({ url, label }) =>
+        fetch(url).then(r => {
+          if (!r.ok) throw new Error(`${label} HTTP ${r.status}`);
+          return r.json();
+        })
+      )
+    );
+    results.push(...batch);
+  }
+  return results;
+}
 
 // ── Fetch functions ──────────────────────────────────────────────────────────
 //
@@ -118,21 +164,42 @@ const BOUNDS_WKT =
 // sourceId (string) is used instead of a source reference so results are JSON-serializable.
 
 async function fetchINaturalist(sourceId) {
-  const params = new URLSearchParams({
+  const PAGE_SIZE = 200;
+  const maxPages = Math.ceil(activeResultLimit / PAGE_SIZE);
+
+  const baseParams = {
     taxon_id: 41860, // Enhydra lutris
-    swlat: BOUNDS.swlat, swlng: BOUNDS.swlng,
-    nelat: BOUNDS.nelat, nelng: BOUNDS.nelng,
-    quality_grade: 'research',
-    per_page: 200,
+    quality_grade: 'research,needs_id',
+    per_page: PAGE_SIZE,
     order: 'desc',
     order_by: 'observed_on',
-  });
+  };
 
-  const res = await fetch(`https://api.inaturalist.org/v1/observations?${params}`);
-  if (!res.ok) throw new Error(`iNaturalist HTTP ${res.status}`);
-  const data = await res.json();
+  if (activeRegion === 'pacific') {
+    baseParams.swlat = BOUNDS.swlat;
+    baseParams.swlng = BOUNDS.swlng;
+    baseParams.nelat = BOUNDS.nelat;
+    baseParams.nelng = BOUNDS.nelng;
+  }
 
-  return data.results
+  // Fetch page 1 first to learn total_results
+  const firstRes = await fetch(
+    `https://api.inaturalist.org/v1/observations?${new URLSearchParams({ ...baseParams, page: 1 })}`
+  );
+  if (!firstRes.ok) throw new Error(`iNaturalist HTTP ${firstRes.status}`);
+  const firstData = await firstRes.json();
+
+  const totalPages = Math.min(Math.ceil(firstData.total_results / PAGE_SIZE), maxPages);
+
+  // Build remaining page URLs then fetch in batches of 5
+  const remainingUrls = Array.from({ length: totalPages - 1 }, (_, i) => i + 2).map(page => ({
+    url: `https://api.inaturalist.org/v1/observations?${new URLSearchParams({ ...baseParams, page })}`,
+    label: `iNaturalist p${page}`,
+  }));
+  const extraData = await fetchBatched(remainingUrls);
+
+  return [firstData, ...extraData]
+    .flatMap(d => d.results)
     .filter(obs => obs.location)
     .map(obs => {
       const [lat, lng] = obs.location.split(',').map(Number);
@@ -150,30 +217,52 @@ async function fetchINaturalist(sourceId) {
 }
 
 async function fetchOBIS(sourceId) {
-  const params = new URLSearchParams({
+  const PAGE_SIZE = 200;
+  const maxPages = Math.ceil(activeResultLimit / PAGE_SIZE);
+
+  const baseParams = {
     scientificname: 'Enhydra lutris',
-    startlat: BOUNDS.swlat, endlat: BOUNDS.nelat,
-    startlon: BOUNDS.swlng, endlon: BOUNDS.nelng,
-    size: 200,
+    size: PAGE_SIZE,
+  };
+
+  if (activeRegion === 'pacific') {
+    baseParams.startlat = BOUNDS.swlat;
+    baseParams.endlat   = BOUNDS.nelat;
+    baseParams.startlon = BOUNDS.swlng;
+    baseParams.endlon   = BOUNDS.nelng;
+  }
+
+  // Fetch page 1 to learn total count
+  const firstRes = await fetch(
+    `https://api.obis.org/v3/occurrence?${new URLSearchParams({ ...baseParams, offset: 0 })}`
+  );
+  if (!firstRes.ok) throw new Error(`OBIS HTTP ${firstRes.status}`);
+  const firstData = await firstRes.json();
+
+  const totalPages = Math.min(Math.ceil((firstData.total ?? 0) / PAGE_SIZE), maxPages);
+
+  const remainingUrls = Array.from({ length: totalPages - 1 }, (_, i) => i + 1).map(page => ({
+    url: `https://api.obis.org/v3/occurrence?${new URLSearchParams({ ...baseParams, offset: page * PAGE_SIZE })}`,
+    label: `OBIS p${page + 1}`,
+  }));
+  const extraData = await fetchBatched(remainingUrls);
+
+  const normalize = r => ({
+    lat: r.decimalLatitude,
+    lng: r.decimalLongitude,
+    date: r.eventDate?.split('T')[0] ?? r.date_year?.toString() ?? 'Unknown date',
+    place: [r.waterBody, r.locality, r.stateProvince].filter(Boolean).join(', ') || 'Unknown location',
+    observer: r.institutionCode ?? r.datasetName ?? 'Unknown',
+    photoUrl: null,
+    link: `https://obis.org/occurrence/${r.id}`,
+    obscured: false,
+    sourceId,
   });
 
-  const res = await fetch(`https://api.obis.org/v3/occurrence?${params}`);
-  if (!res.ok) throw new Error(`OBIS HTTP ${res.status}`);
-  const data = await res.json();
-
-  return (data.results ?? [])
+  return [firstData, ...extraData]
+    .flatMap(d => d.results ?? [])
     .filter(r => r.decimalLatitude != null && r.decimalLongitude != null)
-    .map(r => ({
-      lat: r.decimalLatitude,
-      lng: r.decimalLongitude,
-      date: r.eventDate?.split('T')[0] ?? r.date_year?.toString() ?? 'Unknown date',
-      place: [r.waterBody, r.locality, r.stateProvince].filter(Boolean).join(', ') || 'Unknown location',
-      observer: r.institutionCode ?? r.datasetName ?? 'Unknown',
-      photoUrl: null,
-      link: `https://obis.org/occurrence/${r.id}`,
-      obscured: false,
-      sourceId,
-    }));
+    .map(normalize);
 }
 
 const FETCH_FN = {
@@ -194,7 +283,11 @@ function renderMarkers() {
     for (const obs of source.results) {
       if (!isInDateRange(obs.date)) continue;
 
-      const marker = L.circleMarker([obs.lat, obs.lng], {
+      // Normalize to 0–360° so Pacific-centered view (178°E) places
+      // CA/AK sightings (negative lng) to the right of Japan, not the left.
+      const lngNorm = obs.lng < 0 ? obs.lng + 360 : obs.lng;
+
+      const marker = L.circleMarker([obs.lat, lngNorm], {
         radius: 7,
         fillColor: source.color,
         color: '#fff',
@@ -232,7 +325,8 @@ async function fetchAllSources({ force = false } = {}) {
     }
   }
 
-  statusEl.textContent = 'Loading sightings...';
+  const regionLabel = activeRegion === 'world' ? 'worldwide' : 'Pacific Coast';
+  statusEl.textContent = `Loading sightings (${regionLabel}, up to ${activeResultLimit.toLocaleString()} per source)…`;
   refreshBtn.disabled = true;
 
   await Promise.all(
@@ -309,6 +403,50 @@ function buildDateFilterUI() {
   }
 }
 
+// ── Region filter UI ──────────────────────────────────────────────────────────
+
+function buildRegionUI() {
+  const container = document.getElementById('region-filter');
+
+  for (const region of REGIONS) {
+    const btn = document.createElement('button');
+    btn.className = 'date-btn' + (region.id === activeRegion ? ' active' : '');
+    btn.textContent = region.label;
+    btn.dataset.region = region.id;
+    btn.addEventListener('click', () => {
+      if (activeRegion === region.id) return;
+      activeRegion = region.id;
+      container.querySelectorAll('.date-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.region === region.id)
+      );
+      fetchAllSources({ force: true }); // bounding box changed — must re-fetch
+    });
+    container.appendChild(btn);
+  }
+}
+
+// ── Result limit UI ───────────────────────────────────────────────────────────
+
+function buildLimitUI() {
+  const container = document.getElementById('limit-filter');
+
+  for (const limit of RESULT_LIMITS) {
+    const btn = document.createElement('button');
+    btn.className = 'date-btn' + (limit.value === activeResultLimit ? ' active' : '');
+    btn.textContent = limit.label;
+    btn.dataset.limit = limit.value;
+    btn.addEventListener('click', () => {
+      if (activeResultLimit === limit.value) return;
+      activeResultLimit = limit.value;
+      container.querySelectorAll('.date-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.limit === String(limit.value))
+      );
+      fetchAllSources({ force: true }); // page count changed — must re-fetch
+    });
+    container.appendChild(btn);
+  }
+}
+
 // ── Source toggle UI ─────────────────────────────────────────────────────────
 
 function buildSourcesUI() {
@@ -340,7 +478,10 @@ function buildSourcesUI() {
 // ── Init ─────────────────────────────────────────────────────────────────────
 
 buildDateFilterUI();
+buildRegionUI();
+buildLimitUI();
 buildSourcesUI();
 document.getElementById('refresh-btn').addEventListener('click', () => fetchAllSources({ force: true }));
+document.getElementById('reset-btn').addEventListener('click', () => map.setView(INITIAL_VIEW.center, INITIAL_VIEW.zoom));
 
 fetchAllSources();
