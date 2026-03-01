@@ -366,7 +366,7 @@ function buildPopup(obs, source) {
   const dot = `<span class="popup-source-dot" style="background:${source.color}"></span>`;
 
   container.innerHTML += `
-    <div class="popup-title">🦦 Sea Otter ${dot} ${source.label}</div>
+    <div class="popup-title"><img class="popup-otter-icon" src="https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Otter/Color/otter_color.svg" alt="otter"> Sea Otter ${dot} ${source.label}</div>
     <div class="popup-meta">
       📅 ${obs.date}<br>
       📍 ${obs.place}<br>
