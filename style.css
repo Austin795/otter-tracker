@@ -31,9 +31,7 @@ body.page-map {
 .otter-icon {
   width: 22px;
   height: 22px;
-  vertical-align: middle;
-  margin-right: 5px;
-  margin-top: -2px; /* optical alignment with text */
+  flex-shrink: 0;
 }
 
 .popup-otter-icon {
@@ -45,6 +43,9 @@ body.page-map {
 }
 
 .site-nav .nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   font-size: 1.1rem;
   font-weight: 700;
   color: white;
