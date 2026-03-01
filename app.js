@@ -55,8 +55,8 @@ function isInDateRange(dateStr) {
 // ── Region filter ────────────────────────────────────────────────────────────
 
 const REGIONS = [
-  { id: 'pacific', label: 'Pacific Coast' },
-  { id: 'world',   label: 'Worldwide' },
+  { id: 'pacific', label: 'Pacific Coast', view: { center: [47, 217], zoom: 5 } },
+  { id: 'world',   label: 'Worldwide',     view: null }, // null = use INITIAL_VIEW
 ];
 
 let activeRegion = 'world';
@@ -105,7 +105,7 @@ function loadCache() {
 
 // ── Map setup ────────────────────────────────────────────────────────────────
 
-const INITIAL_VIEW = { center: [38, 178], zoom: 4 };
+const INITIAL_VIEW = { center: [41.44272637767212, 188.34960937500003], zoom: 4 };
 
 const map = L.map('map', {
   minZoom: 2,
@@ -419,6 +419,8 @@ function buildRegionUI() {
       container.querySelectorAll('.date-btn').forEach(b =>
         b.classList.toggle('active', b.dataset.region === region.id)
       );
+      const v = region.view ?? INITIAL_VIEW;
+      map.flyTo(v.center, v.zoom, { duration: 1.2 });
       fetchAllSources({ force: true }); // bounding box changed — must re-fetch
     });
     container.appendChild(btn);
