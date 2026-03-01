@@ -1,0 +1,482 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #0f1923;
+  color: white;
+}
+
+/* Map page needs a fixed full-viewport flex column so the map fills remaining height */
+body.page-map {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* ── Site Nav ── */
+.site-nav {
+  display: flex;
+  align-items: center;
+  background: #0f2d4a;
+  border-bottom: 2px solid #1a4a6e;
+  padding: 0 20px;
+  flex-shrink: 0;
+  z-index: 1001;
+}
+
+.site-nav .nav-logo {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: white;
+  text-decoration: none;
+  letter-spacing: 0.01em;
+  padding: 13px 0;
+  margin-right: 24px;
+  white-space: nowrap;
+}
+
+.site-nav .nav-links {
+  display: flex;
+  align-items: center;
+  list-style: none;
+  flex: 1;
+}
+
+.site-nav .nav-links a {
+  display: block;
+  padding: 15px 14px;
+  color: rgba(255, 255, 255, 0.65);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px; /* aligns active underline flush with nav border */
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.site-nav .nav-links a:hover {
+  color: white;
+}
+
+.site-nav .nav-links a.active {
+  color: white;
+  border-bottom-color: #2e86c1;
+  font-weight: 600;
+}
+
+/* ── Map page toolbar (below nav) ── */
+#header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: #0a2035;
+  border-bottom: 1px solid #1a4a6e;
+  z-index: 1000;
+  flex-shrink: 0;
+}
+
+#controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+#status {
+  font-size: 0.82rem;
+  opacity: 0.75;
+}
+
+#refresh-btn {
+  padding: 6px 16px;
+  background: #2e86c1;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+#refresh-btn:hover {
+  background: #1a6fa0;
+}
+
+#refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ── Info icon with CSS tooltip ── */
+.info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  font-size: 0.7rem;
+  font-style: normal;
+  cursor: default;
+  position: relative;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.info-icon::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: #0f2d4a;
+  border: 1px solid #1a4a6e;
+  color: rgba(255, 255, 255, 0.88);
+  padding: 8px 12px;
+  border-radius: 7px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  width: 230px;
+  white-space: normal;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 9999;
+}
+
+.info-icon:hover::after {
+  opacity: 1;
+}
+
+/* ── Date filter ── */
+#date-filter {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.date-btn {
+  padding: 4px 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  color: white;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.date-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.date-btn.active {
+  background: #2e86c1;
+  border-color: #2e86c1;
+  font-weight: 600;
+}
+
+/* ── Sources panel ── */
+#sources {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.source-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.source-chip:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.source-chip input[type="checkbox"] {
+  display: none;
+}
+
+.source-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Dim chip when its source is unchecked */
+.source-chip:has(input:not(:checked)) {
+  opacity: 0.4;
+}
+
+/* ── Map ── */
+#map {
+  flex: 1;
+}
+
+/* ── Popup ── */
+.popup-content {
+  max-width: 230px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.popup-content img {
+  width: 100%;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.popup-content .popup-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 5px;
+}
+
+.popup-content .popup-meta {
+  font-size: 0.8rem;
+  color: #444;
+  line-height: 1.6;
+}
+
+.popup-content .popup-link {
+  display: inline-block;
+  margin-top: 7px;
+  font-size: 0.8rem;
+  color: #0077cc;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.popup-content .popup-link:hover {
+  text-decoration: underline;
+}
+
+.popup-source-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  vertical-align: middle;
+  margin: 0 2px;
+}
+
+.popup-obscured {
+  color: #b07d00;
+  font-size: 0.75rem;
+}
+
+/* ── Content pages (about, contribute) ── */
+.content-main {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 48px 24px 80px;
+}
+
+.content-main h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 16px;
+  color: white;
+}
+
+.content-main h2 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 48px 0 14px;
+  color: white;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #1a4a6e;
+}
+
+.content-main p {
+  font-size: 0.975rem;
+  line-height: 1.75;
+  color: rgba(255, 255, 255, 0.82);
+  margin-bottom: 14px;
+}
+
+.content-main ul,
+.content-main ol {
+  padding-left: 1.5em;
+  margin-bottom: 14px;
+}
+
+.content-main li {
+  font-size: 0.975rem;
+  line-height: 1.75;
+  color: rgba(255, 255, 255, 0.82);
+  margin-bottom: 6px;
+}
+
+.content-main a {
+  color: #4a9eed;
+  text-decoration: none;
+}
+
+.content-main a:hover {
+  text-decoration: underline;
+}
+
+/* ── Fact grid (about page) ── */
+.fact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  margin: 20px 0 40px;
+}
+
+.fact-card {
+  background: #0f2d4a;
+  border: 1px solid #1a4a6e;
+  border-radius: 10px;
+  padding: 20px 16px;
+  text-align: center;
+}
+
+.fact-card .fact-number {
+  display: block;
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: #4a9eed;
+  line-height: 1.1;
+  margin-bottom: 6px;
+}
+
+.fact-card .fact-label {
+  display: block;
+  font-size: 0.76rem;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.4;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── CTA cards (contribute page) ── */
+.cta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  margin: 20px 0 32px;
+}
+
+.cta-card {
+  background: #0f2d4a;
+  border: 1px solid #1a4a6e;
+  border-radius: 10px;
+  padding: 28px 24px;
+}
+
+.cta-card h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: white;
+}
+
+.cta-card p {
+  font-size: 0.9rem;
+  margin-bottom: 12px;
+}
+
+.cta-card ul,
+.cta-card ol {
+  padding-left: 0;
+  margin-bottom: 20px;
+}
+
+.cta-card li {
+  font-size: 0.875rem;
+  margin-bottom: 8px;
+}
+
+.cta-steps {
+  list-style: none;
+}
+
+.cta-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.cta-steps li::before {
+  content: attr(data-step);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  background: #2e86c1;
+  color: white;
+  border-radius: 50%;
+  font-size: 0.72rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.btn-primary {
+  display: inline-block;
+  padding: 9px 20px;
+  background: #2e86c1;
+  color: white;
+  text-decoration: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.btn-primary:hover {
+  background: #1a6fa0;
+  text-decoration: none;
+}
+
+/* ── Callout box ── */
+.callout {
+  background: rgba(46, 134, 193, 0.1);
+  border-left: 3px solid #2e86c1;
+  border-radius: 0 8px 8px 0;
+  padding: 14px 18px;
+  margin: 20px 0;
+}
+
+.callout p {
+  margin-bottom: 0;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+/* ── Site footer ── */
+.site-footer {
+  margin-top: 48px;
+  padding: 20px 24px;
+  text-align: center;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.35);
+  border-top: 1px solid #1a4a6e;
+}
+
+.site-footer a {
+  color: rgba(255, 255, 255, 0.5);
+  text-decoration: none;
+}
+
+.site-footer a:hover {
+  color: rgba(255, 255, 255, 0.8);
+}

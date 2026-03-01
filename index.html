@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Otter Tracker — Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="page-map">
+
+  <nav class="site-nav">
+    <a class="nav-logo" href="index.html">🦦 Otter Tracker</a>
+    <ul class="nav-links">
+      <li><a href="index.html" class="active">Map</a></li>
+      <li><a href="about.html">About Sea Otters</a></li>
+      <li><a href="contribute.html">Contribute Data</a></li>
+    </ul>
+  </nav>
+
+  <div id="header">
+    <div id="date-filter"></div>
+    <div id="sources"></div>
+    <div id="controls">
+      <span id="status">Loading sightings...</span>
+      <span class="info-icon" data-tooltip="Some sighting locations are approximate. iNaturalist obscures coordinates for threatened species to protect them from disturbance.">ⓘ</span>
+      <button id="refresh-btn">Refresh</button>
+    </div>
+  </div>
+
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="app.js"></script>
+
+</body>
+</html>
