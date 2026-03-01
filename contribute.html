@@ -36,7 +36,7 @@
 
       <div class="cta-card">
         <h3>Submit a Sighting via iNaturalist</h3>
-        <p>iNaturalist observations that reach Research Grade are ingested
+        <p>iNaturalist observations at Research Grade or Needs ID are ingested
         automatically by this tracker. Here's the process:</p>
         <ol class="cta-steps">
           <li data-step="1">Create a free account at
@@ -47,12 +47,9 @@
           <li data-step="3">Set the species to Sea Otter
             (<em>Enhydra lutris</em>) — the app's AI will often suggest
             this if your photo is clear</li>
-          <li data-step="4">The iNaturalist community will confirm your ID.
-            Once two-thirds of identifications agree, the observation
-            becomes Research Grade</li>
-          <li data-step="5">Research Grade observations are automatically
-            included in this tracker at the next cache refresh (within
-            24 hours)</li>
+          <li data-step="4">Your observation becomes <em>Needs ID</em> immediately
+            and appears on this tracker within 24 hours. Once two-thirds of
+            community identifications agree, it is promoted to Research Grade</li>
         </ol>
         <a class="btn-primary"
            href="https://www.inaturalist.org/taxa/41860-Enhydra-lutris"
@@ -75,19 +72,21 @@
           <li>Note group size if you observe a raft — counts of aggregations
           contribute to monitoring outside formal surveys</li>
           <li>If the otter appears injured, entangled, or stranded, do not
-          approach. Call the CDFW Wildlife Hotline:
-          <strong>1-888-334-2258</strong></li>
+          approach. Contact your local wildlife authority — in California,
+          call the CDFW Wildlife Hotline: <strong>1-888-334-2258</strong></li>
         </ul>
       </div>
 
     </div>
 
     <div class="callout">
-      <p><strong>What is Research Grade?</strong> On iNaturalist, an observation
-      reaches Research Grade when the community reaches a two-thirds agreement on
-      species identification, the observation has a date and location, and it passes
-      automated quality checks. Only Research Grade observations are included in this
-      tracker to ensure that displayed sightings represent verified species records.</p>
+      <p><strong>Research Grade vs. Needs ID:</strong> On iNaturalist, a new
+      observation enters <em>Needs ID</em> status as soon as it is posted with a
+      species suggestion. It is promoted to <em>Research Grade</em> once the
+      community reaches two-thirds agreement on the identification, the observation
+      has a date and location, and it passes automated quality checks. This tracker
+      includes both grades so your sighting appears on the map immediately — not
+      only after community review.</p>
     </div>
 
     <h2>For Organizations and Researchers</h2>
@@ -112,7 +111,7 @@
           <li>Your institutional affiliation and contact information</li>
         </ul>
         <a class="btn-primary"
-           href="https://github.com/your-repo/issues/new"
+           href="https://github.com/Austin795/otter-tracker/issues/new"
            target="_blank" rel="noopener">
           Open a GitHub Issue
         </a>
@@ -127,19 +126,20 @@
 
     <ul>
       <li><strong>Two sources, one map:</strong> Sightings are pulled from
-      iNaturalist (Research Grade only) and OBIS (ocean occurrence records). Each
-      source is color-coded on the map and can be toggled independently.</li>
+      iNaturalist (Research Grade and Needs ID) and OBIS (ocean occurrence records).
+      Each source is color-coded on the map and can be toggled independently.</li>
       <li><strong>24-hour browser cache:</strong> Data is fetched from each API and
       stored in your browser's local storage for 24 hours. The Refresh button forces
       a new fetch from both APIs immediately. New observations will appear within one
       cache cycle of being published to their source platform.</li>
-      <li><strong>Geographic scope:</strong> The tracker displays sightings within a
-      bounding box covering the California coast north through Washington, British
-      Columbia, and into Alaska (roughly 32.5°N–62°N, 170°W–116.5°W). Records
-      outside this area are not shown.</li>
-      <li><strong>Date filtering:</strong> All available records are fetched, then
-      filtered client-side by the selected date range (30 days, 6 months, 1 year, or
-      all time). Switching the filter requires no additional API calls.</li>
+      <li><strong>Region and result limits:</strong> The map defaults to Worldwide
+      coverage with up to 5,000 records per source. Switch to Pacific Coast mode to
+      filter results to the California–Alaska coastline (32.5°N–62°N, 170°W–116.5°W).
+      The result limit can be raised to 10,000 records per source for deeper coverage;
+      records are fetched in paginated batches to stay within API rate limits.</li>
+      <li><strong>Date filtering:</strong> All fetched records are filtered
+      client-side by the selected date range (30 days, 6 months, 1 year, or all
+      time). Switching the filter requires no additional API calls.</li>
       <li><strong>Obscured locations:</strong> iNaturalist automatically obscures the
       precise coordinates of observations for threatened species to protect them from
       disturbance. These appear on the map with an approximate location.</li>
@@ -150,8 +150,8 @@
     <p>To maintain scientific defensibility, each source is filtered before display:</p>
 
     <ul>
-      <li><strong>iNaturalist:</strong> Only Research Grade observations are requested.
-      Observations without GPS coordinates are excluded.</li>
+      <li><strong>iNaturalist:</strong> Research Grade and Needs ID observations are
+      requested. Observations without GPS coordinates are excluded.</li>
       <li><strong>OBIS:</strong> Records without valid decimal latitude and longitude
       are excluded. OBIS applies its own quality control pipeline before records are
       served via the API.</li>
