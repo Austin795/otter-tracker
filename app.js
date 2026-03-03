@@ -283,13 +283,16 @@ const FETCH_FN = {
 // Squared distance avoids sqrt — fine for ranking purposes.
 
 function findIsolatedSightings(allResults, excludeLinks, count = 3) {
-  const cutoff = new Date();
-  cutoff.setFullYear(cutoff.getFullYear() - 2);
-  const cutoffStr = cutoff.toISOString().split('T')[0];
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const cutoff30 = thirtyDaysAgo.toISOString().split('T')[0];
 
+  // Candidates must be within the last 30 days, pass the active date filter
+  // (so a marker always exists in markerByLink), and have a real location name.
   const candidates = allResults.filter(obs =>
-    obs.date && obs.date !== 'Unknown date' &&
-    obs.date >= cutoffStr &&
+    obs.date >= cutoff30 &&
+    isInDateRange(obs.date) &&
+    obs.place && obs.place !== 'Unknown location' &&
     !excludeLinks.has(obs.link)
   );
 
