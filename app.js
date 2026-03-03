@@ -109,12 +109,15 @@ const INITIAL_VIEW = { center: [41.44272637767212, 188.34960937500003], zoom: 4 
 
 const map = L.map('map', {
   minZoom: 2,
+  zoomControl: false,
   // Allow one full world wrap so the Pacific (straddling the date line) can be
   // centered: Japan (~140°E) sits left, Alaska/CA (~120–170°W = 190–240°E) right.
   // The right bound at 360° stops infinite panning — the user can go around once.
   maxBounds: [[-85, -180], [85, 360]],
   maxBoundsViscosity: 1.0,
 }).setView(INITIAL_VIEW.center, INITIAL_VIEW.zoom);
+
+L.control.zoom({ position: 'topright' }).addTo(map);
 
 L.tileLayer(
   'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -130,6 +133,9 @@ const clusterGroup = L.markerClusterGroup({
   maxClusterRadius: 50,
 });
 map.addLayer(clusterGroup);
+
+// Maps obs.link → its Leaflet marker so recent-sightings cards can zoom to it.
+const markerByLink = new Map();
 
 // ── Bounding box (CA coast → Alaska) ────────────────────────────────────────
 
@@ -270,10 +276,197 @@ const FETCH_FN = {
   obis: fetchOBIS,
 };
 
+// ── Isolation scoring (for "unusual sightings" panel) ────────────────────────
+//
+// Score each observation by its squared distance to its nearest neighbour in
+// the full iNaturalist dataset.  Higher score = more geographically isolated.
+// Squared distance avoids sqrt — fine for ranking purposes.
+
+function findIsolatedSightings(allResults, excludeLinks, count = 3) {
+  const cutoff = new Date();
+  cutoff.setFullYear(cutoff.getFullYear() - 2);
+  const cutoffStr = cutoff.toISOString().split('T')[0];
+
+  const candidates = allResults.filter(obs =>
+    obs.date && obs.date !== 'Unknown date' &&
+    obs.date >= cutoffStr &&
+    !excludeLinks.has(obs.link)
+  );
+
+  if (candidates.length === 0) return [];
+
+  return candidates
+    .map(obs => {
+      let minDistSq = Infinity;
+      for (const other of allResults) {
+        if (other === obs) continue;
+        const dlat = obs.lat - other.lat;
+        const dlng = obs.lng - other.lng;
+        const dSq = dlat * dlat + dlng * dlng;
+        if (dSq < minDistSq) minDistSq = dSq;
+      }
+      return { obs, score: minDistSq };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, count)
+    .map(({ obs }) => obs);
+}
+
+// ── Hotspot detection ─────────────────────────────────────────────────────────
+//
+// Among sightings from the last 90 days, find the one with the most neighbours
+// within a ~1° radius (~100 km).  That becomes the hotspot centre; we return
+// the `count` most recent observations inside that radius.
+
+function findHotspotSightings(allResults, excludeLinks, count = 3) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 90);
+  const cutoffStr = cutoff.toISOString().split('T')[0];
+
+  const recent = allResults.filter(obs =>
+    obs.date && obs.date !== 'Unknown date' && obs.date >= cutoffStr
+  );
+
+  if (recent.length === 0) return [];
+
+  const RADIUS_SQ = 1.0; // 1° lat/lng ≈ 100 km
+
+  // Find the recent sighting surrounded by the most other recent sightings
+  let bestCenter = null;
+  let bestCount = -1;
+
+  for (const obs of recent) {
+    let n = 0;
+    for (const other of recent) {
+      if (other === obs) continue;
+      const dlat = obs.lat - other.lat;
+      const dlng = obs.lng - other.lng;
+      if (dlat * dlat + dlng * dlng <= RADIUS_SQ) n++;
+    }
+    if (n > bestCount) { bestCount = n; bestCenter = obs; }
+  }
+
+  if (!bestCenter) return [];
+
+  return recent
+    .filter(obs => {
+      if (excludeLinks.has(obs.link)) return false;
+      const dlat = obs.lat - bestCenter.lat;
+      const dlng = obs.lng - bestCenter.lng;
+      return dlat * dlat + dlng * dlng <= RADIUS_SQ;
+    })
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, count);
+}
+
+// ── Recent sightings panel ────────────────────────────────────────────────────
+
+function buildSightingCard(obs, badgeHtml) {
+  const card = document.createElement('div');
+  card.className = 'recent-card';
+  card.title = 'Click to zoom to this sighting';
+
+  if (obs.photoUrl) {
+    const img = document.createElement('img');
+    img.className = 'recent-photo';
+    img.src = obs.photoUrl;
+    img.alt = 'Sea otter';
+    card.appendChild(img);
+  } else {
+    const ph = document.createElement('div');
+    ph.className = 'recent-photo-placeholder';
+    ph.textContent = '🦦';
+    card.appendChild(ph);
+  }
+
+  const info = document.createElement('div');
+  info.className = 'recent-info';
+  info.innerHTML = `
+    ${badgeHtml}
+    <div class="recent-date">${obs.date}</div>
+    <div class="recent-place">${obs.place}</div>
+  `;
+  card.appendChild(info);
+
+  card.addEventListener('click', () => {
+    const lngNorm = obs.lng < 0 ? obs.lng + 360 : obs.lng;
+    const marker = markerByLink.get(obs.link);
+    if (marker) {
+      clusterGroup.zoomToShowLayer(marker, () => marker.openPopup());
+    } else {
+      map.flyTo([obs.lat, lngNorm], 10);
+    }
+  });
+
+  return card;
+}
+
+function renderRecentSightings() {
+  const panel = document.getElementById('recent-sightings');
+  const inat = DATA_SOURCES.find(s => s.id === 'inaturalist');
+  panel.innerHTML = '';
+
+  const header = document.createElement('div');
+  header.className = 'recent-header';
+  header.innerHTML = `Latest Sightings`;
+  panel.appendChild(header);
+
+  if (!inat || inat.results.length === 0) return new Set();
+
+  const recent = [...inat.results]
+    .filter(obs => obs.date && obs.date !== 'Unknown date')
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 3);
+
+  for (const obs of recent) {
+    panel.appendChild(buildSightingCard(obs, '<div class="recent-badge">NEW</div>'));
+  }
+
+  return new Set(recent.map(obs => obs.link));
+}
+
+function renderHotspotSightings(excludeLinks) {
+  const panel = document.getElementById('hotspot-sightings');
+  const inat = DATA_SOURCES.find(s => s.id === 'inaturalist');
+  panel.innerHTML = '';
+
+  const header = document.createElement('div');
+  header.className = 'recent-header';
+  header.innerHTML = `Recent Hotspot`;
+  panel.appendChild(header);
+
+  if (!inat || inat.results.length === 0) return;
+
+  const hotspot = findHotspotSightings(inat.results, excludeLinks);
+  for (const obs of hotspot) {
+    panel.appendChild(buildSightingCard(obs, '<div class="hot-badge">ACTIVE</div>'));
+  }
+}
+
+function renderInterestingSightings(excludeLinks) {
+  const panel = document.getElementById('interesting-sightings');
+  const inat = DATA_SOURCES.find(s => s.id === 'inaturalist');
+  panel.innerHTML = '';
+
+  const header = document.createElement('div');
+  header.className = 'recent-header';
+  header.innerHTML = `Unusual Sightings`;
+  panel.appendChild(header);
+
+  if (!inat || inat.results.length === 0) return new Set();
+
+  const isolated = findIsolatedSightings(inat.results, excludeLinks);
+  for (const obs of isolated) {
+    panel.appendChild(buildSightingCard(obs, '<div class="rare-badge">RARE</div>'));
+  }
+  return new Set(isolated.map(obs => obs.link));
+}
+
 // ── Rendering ────────────────────────────────────────────────────────────────
 
 function renderMarkers() {
   clusterGroup.clearLayers();
+  markerByLink.clear();
 
   const counts = {};
   for (const source of DATA_SOURCES) {
@@ -298,6 +491,7 @@ function renderMarkers() {
 
       marker.bindPopup(() => buildPopup(obs, source), { maxWidth: 260 });
       clusterGroup.addLayer(marker);
+      markerByLink.set(obs.link, marker);
       counts[source.id]++;
     }
   }
@@ -305,6 +499,10 @@ function renderMarkers() {
   const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const summary = DATA_SOURCES.map(s => `${s.label}: ${counts[s.id]}`).join(' · ');
   document.getElementById('status').textContent = `${summary} · updated ${time}`;
+
+  const recentLinks = renderRecentSightings();
+  const isolatedLinks = renderInterestingSightings(recentLinks);
+  renderHotspotSightings(new Set([...recentLinks, ...isolatedLinks]));
 }
 
 // ── Fetching ─────────────────────────────────────────────────────────────────
