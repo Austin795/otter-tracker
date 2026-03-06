@@ -300,7 +300,33 @@ body.page-map {
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.55);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  user-select: none;
 }
+
+.recent-header:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.panel-chevron {
+  margin-left: auto;
+  font-size: 0.75rem;
+  opacity: 0.4;
+  transition: transform 0.2s;
+}
+
+/* Cards shown only when 1 other panel is collapsed */
+.recent-card.extra-1 { display: none; }
+.sightings-panel.expanded .recent-card.extra-1,
+.sightings-panel.super-expanded .recent-card.extra-1 { display: flex; }
+
+/* Cards shown only when 2 other panels are collapsed */
+.recent-card.extra-2 { display: none; }
+.sightings-panel.super-expanded .recent-card.extra-2 { display: flex; }
+
+.sightings-panel.collapsed .recent-card { display: none; }
+.sightings-panel.collapsed .recent-header { border-bottom: none; }
+.sightings-panel.collapsed .panel-chevron { transform: rotate(-90deg); }
 
 .recent-header img {
   width: 14px;

@@ -362,11 +362,53 @@ function findHotspotSightings(allResults, excludeLinks, count = 3) {
     .slice(0, count);
 }
 
+// ── Panel expand / collapse ───────────────────────────────────────────────────
+
+const PANEL_IDS = ['recent-sightings', 'interesting-sightings', 'hotspot-sightings'];
+const collapsedPanels = new Set();
+
+function applyPanelState() {
+  const n = collapsedPanels.size; // 0, 1, or 2 collapsed
+  for (const id of PANEL_IDS) {
+    const el = document.getElementById(id);
+    el.classList.remove('collapsed', 'expanded', 'super-expanded');
+    if (collapsedPanels.has(id)) {
+      el.classList.add('collapsed');
+    } else if (n === 1) {
+      el.classList.add('expanded');       // 5 cards
+    } else if (n === 2) {
+      el.classList.add('super-expanded'); // 9 cards
+    }
+    // n === 0: no class → 3 cards (default)
+  }
+}
+
+function togglePanel(panelId) {
+  collapsedPanels.has(panelId) ? collapsedPanels.delete(panelId) : collapsedPanels.add(panelId);
+  applyPanelState();
+}
+
+function buildPanelHeader(text, panelId) {
+  const header = document.createElement('div');
+  header.className = 'recent-header';
+  header.innerHTML = `<img src="https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Otter/Color/otter_color.svg" alt="otter"> ${text} <span class="panel-chevron">▾</span>`;
+  header.addEventListener('click', () => togglePanel(panelId));
+  return header;
+}
+
 // ── Recent sightings panel ────────────────────────────────────────────────────
 
-function buildSightingCard(obs, badgeHtml) {
+const CARDS_MAX = 9; // render up to 9; CSS controls how many are visible per tier
+
+function extraClass(i) {
+  if (i >= 4) return ' extra-2'; // visible only when super-expanded (2 others collapsed)
+  if (i >= 3) return ' extra-1'; // visible when expanded (1 other collapsed)
+  return '';
+}
+
+function buildSightingCard(obs, badgeHtml, cls = '') {
   const card = document.createElement('div');
-  card.className = 'recent-card';
+  card.className = 'recent-card' + cls;
   card.title = 'Click to zoom to this sighting';
 
   if (obs.photoUrl) {
@@ -408,61 +450,49 @@ function renderRecentSightings() {
   const panel = document.getElementById('recent-sightings');
   const inat = DATA_SOURCES.find(s => s.id === 'inaturalist');
   panel.innerHTML = '';
-
-  const header = document.createElement('div');
-  header.className = 'recent-header';
-  header.innerHTML = `Latest Sightings`;
-  panel.appendChild(header);
+  panel.appendChild(buildPanelHeader('Latest Sightings', 'recent-sightings'));
 
   if (!inat || inat.results.length === 0) return new Set();
 
   const recent = [...inat.results]
     .filter(obs => obs.date && obs.date !== 'Unknown date')
     .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 3);
+    .slice(0, CARDS_MAX);
 
-  for (const obs of recent) {
-    panel.appendChild(buildSightingCard(obs, '<div class="recent-badge">NEW</div>'));
-  }
+  recent.forEach((obs, i) => {
+    panel.appendChild(buildSightingCard(obs, '<div class="recent-badge">NEW</div>', extraClass(i)));
+  });
 
   return new Set(recent.map(obs => obs.link));
-}
-
-function renderHotspotSightings(excludeLinks) {
-  const panel = document.getElementById('hotspot-sightings');
-  const inat = DATA_SOURCES.find(s => s.id === 'inaturalist');
-  panel.innerHTML = '';
-
-  const header = document.createElement('div');
-  header.className = 'recent-header';
-  header.innerHTML = `Recent Hotspot`;
-  panel.appendChild(header);
-
-  if (!inat || inat.results.length === 0) return;
-
-  const hotspot = findHotspotSightings(inat.results, excludeLinks);
-  for (const obs of hotspot) {
-    panel.appendChild(buildSightingCard(obs, '<div class="hot-badge">ACTIVE</div>'));
-  }
 }
 
 function renderInterestingSightings(excludeLinks) {
   const panel = document.getElementById('interesting-sightings');
   const inat = DATA_SOURCES.find(s => s.id === 'inaturalist');
   panel.innerHTML = '';
-
-  const header = document.createElement('div');
-  header.className = 'recent-header';
-  header.innerHTML = `Unusual Sightings`;
-  panel.appendChild(header);
+  panel.appendChild(buildPanelHeader('Unusual Sightings', 'interesting-sightings'));
 
   if (!inat || inat.results.length === 0) return new Set();
 
-  const isolated = findIsolatedSightings(inat.results, excludeLinks);
-  for (const obs of isolated) {
-    panel.appendChild(buildSightingCard(obs, '<div class="rare-badge">RARE</div>'));
-  }
+  const isolated = findIsolatedSightings(inat.results, excludeLinks, CARDS_MAX);
+  isolated.forEach((obs, i) => {
+    panel.appendChild(buildSightingCard(obs, '<div class="rare-badge">RARE</div>', extraClass(i)));
+  });
   return new Set(isolated.map(obs => obs.link));
+}
+
+function renderHotspotSightings(excludeLinks) {
+  const panel = document.getElementById('hotspot-sightings');
+  const inat = DATA_SOURCES.find(s => s.id === 'inaturalist');
+  panel.innerHTML = '';
+  panel.appendChild(buildPanelHeader('Recent Hotspot', 'hotspot-sightings'));
+
+  if (!inat || inat.results.length === 0) return;
+
+  const hotspot = findHotspotSightings(inat.results, excludeLinks, CARDS_MAX);
+  hotspot.forEach((obs, i) => {
+    panel.appendChild(buildSightingCard(obs, '<div class="hot-badge">ACTIVE</div>', extraClass(i)));
+  });
 }
 
 // ── Rendering ────────────────────────────────────────────────────────────────
@@ -506,6 +536,7 @@ function renderMarkers() {
   const recentLinks = renderRecentSightings();
   const isolatedLinks = renderInterestingSightings(recentLinks);
   renderHotspotSightings(new Set([...recentLinks, ...isolatedLinks]));
+  applyPanelState();
 }
 
 // ── Fetching ─────────────────────────────────────────────────────────────────
