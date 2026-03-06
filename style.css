@@ -328,11 +328,6 @@ body.page-map {
 .sightings-panel.collapsed .recent-header { border-bottom: none; }
 .sightings-panel.collapsed .panel-chevron { transform: rotate(-90deg); }
 
-.recent-header img {
-  width: 14px;
-  height: 14px;
-}
-
 .recent-card {
   display: flex;
   align-items: flex-start;

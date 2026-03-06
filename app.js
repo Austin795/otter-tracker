@@ -391,7 +391,7 @@ function togglePanel(panelId) {
 function buildPanelHeader(text, panelId) {
   const header = document.createElement('div');
   header.className = 'recent-header';
-  header.innerHTML = `<img src="https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Otter/Color/otter_color.svg" alt="otter"> ${text} <span class="panel-chevron">▾</span>`;
+  header.innerHTML = `${text} <span class="panel-chevron">▾</span>`;
   header.addEventListener('click', () => togglePanel(panelId));
   return header;
 }
